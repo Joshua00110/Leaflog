@@ -1,98 +1,136 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
+import { db } from '../../firebaseConfig'; 
+import { collection, onSnapshot, query } from 'firebase/firestore';
 import { Link } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function HomeScreen() {
+interface Space {
+  id: string;
+  name: string;
+  lightCondition: string;
+}
+
+export default function HomeDashboard() {
+  const [spaces, setSpaces] = useState<Space[]>([]);
+  const [totalPlants, setTotalPlants] = useState(0);
+
+  useEffect(() => {
+    // Sync Dynamic Spaces
+    const qSpaces = query(collection(db, "spaces"));
+    const unsubSpaces = onSnapshot(qSpaces, (snapshot) => {
+      setSpaces(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Space)));
+    });
+
+    // Sync total plant count for the top stat card
+    const qPlants = query(collection(db, "plants"));
+    const unsubPlants = onSnapshot(qPlants, (snapshot) => {
+      setTotalPlants(snapshot.size);
+    });
+
+    return () => { unsubSpaces(); unsubPlants(); };
+  }, []);
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        
+        {/* Header with Stats */}
+        <View style={styles.headerCard}>
+          <Text style={styles.brandTitle}>Leaflog</Text>
+          <Text style={styles.greeting}>Hi, gardener.</Text>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+          <View style={styles.statsRow}>
+            <View style={[styles.statsCard, { backgroundColor: '#E0F2F1' }]}>
+              <Text style={styles.statsNumber}>{totalPlants}</Text>
+              <Text style={styles.statsLabel}>Total Plants</Text>
+            </View>
+            <View style={[styles.statsCard, { backgroundColor: '#F5F5F5' }]}>
+              <Text style={styles.statsNumber}>{spaces.length}</Text>
+              <Text style={styles.statsLabel}>Active Spaces</Text>
+            </View>
+          </View>
+        </View>
+
+        <Text style={styles.sectionTitle}>Your plant spaces</Text>
+        <Text style={styles.sectionSubtitle}>Tap a space to view its plants</Text>
+
+        {/* 1. Dynamic Spaces: These will appear here as you add them */}
+        {spaces.map((space) => (
+          <TouchableOpacity key={space.id} style={styles.spaceCard}>
+            <View style={styles.spaceIconBox}>
+              <Ionicons name="leaf-outline" size={32} color="#2D4B2D" />
+            </View>
+            <View style={styles.spaceInfo}>
+              <View style={styles.spaceHeader}>
+                <Text style={styles.spaceName}>{space.name}</Text>
+                <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
+              </View>
+              <Text style={styles.spaceDetail}>Light: {space.lightCondition}</Text>
+              <View style={styles.statusRow}>
+                <Ionicons name="sparkles" size={16} color="#6B8E6B" />
+                <Text style={styles.statusText}>Connected</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))}
+
+        {/* 2. Permanent Retired Plants Card */}
+        <TouchableOpacity style={styles.retiredCard}>
+          <View style={styles.retiredIconBox}>
+            <Ionicons name="archive-outline" size={24} color="#2D4B2D" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.retiredTitle}>Retired plants</Text>
+            <Text style={styles.retiredSub}>Plant graveyard - visit past blooms anytime.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color="#666" />
+        </TouchableOpacity>
+
+      </ScrollView>
+
+      {/* Floating Action Button to add new Spaces */}
+      <Link href="/add" asChild>
+        <TouchableOpacity style={styles.fab}>
+          <Ionicons name="add" size={32} color="white" />
+        </TouchableOpacity>
+      </Link>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: { flex: 1, backgroundColor: '#F9FBF9' },
+  scrollContent: { padding: 20 },
+  headerCard: { backgroundColor: '#FFF', borderRadius: 28, padding: 20, marginBottom: 25 },
+  brandTitle: { fontSize: 40, fontWeight: 'bold', color: '#2D4B2D', fontFamily: 'serif' },
+  greeting: { fontSize: 18, color: '#666', marginBottom: 20 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  statsCard: { width: '48%', padding: 15, borderRadius: 16 },
+  statsNumber: { fontSize: 26, fontWeight: 'bold', color: '#2D4B2D' },
+  statsLabel: { fontSize: 14, color: '#444' },
+  sectionTitle: { fontSize: 24, fontWeight: 'bold', color: '#1A1A1A' },
+  sectionSubtitle: { fontSize: 16, color: '#666', marginBottom: 20 },
+  spaceCard: { 
+    backgroundColor: '#FFF', borderRadius: 24, padding: 16, flexDirection: 'row', 
+    alignItems: 'center', marginBottom: 15, elevation: 1 
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  spaceIconBox: { width: 80, height: 80, backgroundColor: '#F0F4F0', borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  spaceInfo: { flex: 1, marginLeft: 15 },
+  spaceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  spaceName: { fontSize: 20, fontWeight: 'bold', color: '#1A1A1A' },
+  spaceDetail: { fontSize: 14, color: '#666', marginTop: 2 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+  statusText: { marginLeft: 6, color: '#6B8E6B', fontWeight: '600' },
+  retiredCard: { 
+    backgroundColor: '#FFF', borderRadius: 24, padding: 16, flexDirection: 'row', 
+    alignItems: 'center', marginTop: 10, elevation: 1 
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
+  retiredIconBox: { width: 50, height: 50, backgroundColor: '#F0F4F0', borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+  retiredTitle: { fontSize: 18, fontWeight: 'bold', color: '#1A1A1A' },
+  retiredSub: { fontSize: 12, color: '#666' },
+  fab: { 
+    position: 'absolute', bottom: 30, right: 30, backgroundColor: '#2D4B2D', 
+    width: 65, height: 65, borderRadius: 32.5, justifyContent: 'center', alignItems: 'center', elevation: 5 
+  }
 });
