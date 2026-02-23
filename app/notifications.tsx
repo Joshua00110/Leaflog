@@ -1,14 +1,20 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, SafeAreaView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+// We keep the import but wrap the usage in a try/catch for Expo Go compatibility
 import * as Notifications from 'expo-notifications';
 
 export default function NotificationPermission() {
   const router = useRouter();
 
+  const handleNavigation = () => {
+    // UPDATED: Now points to the Auth screen instead of (tabs)
+    router.replace('/auth');
+  };
+
   const handlePermission = async () => {
     try {
-      // Basic check for physical device/emulator capabilities
+      // Logic for Android Notification Channels
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('default', {
           name: 'default',
@@ -16,14 +22,14 @@ export default function NotificationPermission() {
         });
       }
 
+      // Request native permissions
       const { status } = await Notifications.requestPermissionsAsync();
       console.log("Permission Status:", status);
     } catch (error) {
-      // This catches the "Android Push notifications" console error you saw
-      console.warn("Notification initialization failed. Skipping to Dashboard.");
+      // Prevents the "Remote notifications removed from Expo Go" crash
+      console.warn("Notifications not supported in this environment. Moving to Auth.");
     } finally {
-      // Always move to the tabs regardless of error
-      router.replace('/(tabs)');
+      handleNavigation();
     }
   };
 
@@ -49,7 +55,8 @@ export default function NotificationPermission() {
         <TouchableOpacity style={styles.primaryButton} onPress={handlePermission}>
           <Text style={styles.primaryButtonText}>Turn on notifications</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryButton} onPress={() => router.replace('/(tabs)')}>
+        
+        <TouchableOpacity style={styles.secondaryButton} onPress={handleNavigation}>
           <Text style={styles.secondaryButtonText}>Maybe later</Text>
         </TouchableOpacity>
       </View>

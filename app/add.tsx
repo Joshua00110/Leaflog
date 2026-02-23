@@ -1,63 +1,81 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView } from 'react-native';
+import { db, auth } from '../firebaseConfig'; 
+import { collection, addDoc } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function LandingPage() {
+export default function AddSpace() {
+  const [spaceName, setSpaceName] = useState('');
+  const [light, setLight] = useState('Partial Sun');
   const router = useRouter();
+
+  const handleSave = async () => {
+    if (!spaceName) return alert("Please name your space");
+
+    try {
+      // Save the new space to Firestore
+      await addDoc(collection(db, "spaces"), {
+        name: spaceName,
+        lightCondition: light,
+        userId: auth.currentUser?.uid, // Links the space to the logged-in user
+        createdAt: new Date().toISOString(),
+      });
+      router.back(); // Go back to the dashboard to see the new card
+    } catch (error) {
+      console.error("Error adding space: ", error);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Brand Card */}
-      <View style={styles.brandCard}>
-        <Text style={styles.brandTitle}>Leaflog</Text>
-        <Text style={styles.brandSubtitle}>
-          Simple coordination. Thriving plants. 🌱
-        </Text>
-      </View>
-
-      {/* Illustration Area */}
-      <View style={styles.illustrationContainer}>
-        {/* Replace with your local image once you have one in /assets */}
-        <Image 
-          source={{ uri: 'https://img.freepik.com/free-vector/garden-concept-illustration_114360-3164.jpg' }} 
-          style={styles.image}
-          resizeMode="contain"
-        />
-      </View>
-
-      {/* Bottom Action Area */}
-      <View style={styles.footer}>
-        <TouchableOpacity 
-          style={styles.button} 
-          onPress={() => router.push('/(tabs)')}
-        >
-          <Text style={styles.buttonText}>Get started</Text>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="close" size={28} color="#2D4B2D" />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>New Space</Text>
+        <TouchableOpacity onPress={handleSave}>
+          <Text style={styles.saveText}>Save</Text>
+        </TouchableOpacity>
+      </View>
 
-        <Text style={styles.legalText}>
-          By continuing you accept our <Text style={styles.link}>Privacy Policy</Text> and <Text style={styles.link}>Terms & Conditions</Text>
-        </Text>
+      <View style={styles.form}>
+        <Text style={styles.label}>What should we call this area?</Text>
+        <TextInput 
+          style={styles.input} 
+          placeholder="e.g. Living Room, Balcony" 
+          value={spaceName}
+          onChangeText={setSpaceName}
+        />
+
+        <Text style={styles.label}>Light Conditions</Text>
+        <View style={styles.lightOptions}>
+          {['Full Sun', 'Partial Sun', 'Shade'].map((option) => (
+            <TouchableOpacity 
+              key={option} 
+              style={[styles.chip, light === option && styles.activeChip]}
+              onPress={() => setLight(option)}
+            >
+              <Text style={[styles.chipText, light === option && styles.activeChipText]}>{option}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#E8F0E8', alignItems: 'center' },
-  brandCard: { 
-    backgroundColor: '#FFF', width: '90%', marginTop: 40, padding: 30, 
-    borderRadius: 30, alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05 
-  },
-  brandTitle: { fontSize: 42, fontWeight: 'bold', color: '#2D4B2D', fontFamily: 'serif' },
-  brandSubtitle: { fontSize: 18, color: '#4A6B4A', textAlign: 'center', marginTop: 10, lineHeight: 26 },
-  illustrationContainer: { flex: 1, justifyContent: 'center', width: '100%' },
-  image: { width: '100%', height: 300 },
-  footer: { width: '100%', paddingHorizontal: 30, paddingBottom: 40, alignItems: 'center' },
-  button: { 
-    backgroundColor: '#2D4B2D', width: '100%', padding: 20, 
-    borderRadius: 35, alignItems: 'center', marginBottom: 25 
-  },
-  buttonText: { color: 'white', fontSize: 18, fontWeight: '600' },
-  legalText: { fontSize: 12, color: '#666', textAlign: 'center', lineHeight: 18 },
-  link: { textDecorationLine: 'underline', fontWeight: '500' }
+  container: { flex: 1, backgroundColor: '#FFF' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#EEE' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#2D4B2D' },
+  saveText: { fontSize: 18, fontWeight: 'bold', color: '#2D4B2D' },
+  form: { padding: 25 },
+  label: { fontSize: 16, color: '#666', marginBottom: 10, marginTop: 20 },
+  input: { backgroundColor: '#F0F4F0', padding: 15, borderRadius: 12, fontSize: 16 },
+  lightOptions: { flexDirection: 'row', marginTop: 10 },
+  chip: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#ADC2AD', marginRight: 10 },
+  activeChip: { backgroundColor: '#2D4B2D', borderColor: '#2D4B2D' },
+  chipText: { color: '#2D4B2D' },
+  activeChipText: { color: '#FFF' }
 });

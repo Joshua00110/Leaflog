@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
-import { db } from '../../firebaseConfig'; 
-import { collection, onSnapshot, query } from 'firebase/firestore';
-import { Link } from 'expo-router';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { db, auth } from '../../firebaseConfig'; 
+import { collection, onSnapshot, query, where } from 'firebase/firestore'; 
+import { Link, useRouter } from 'expo-router'; 
 import { Ionicons } from '@expo/vector-icons';
 
 interface Space {
@@ -14,16 +14,29 @@ interface Space {
 export default function HomeDashboard() {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [totalPlants, setTotalPlants] = useState(0);
+  const router = useRouter(); 
+
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [selectedSpace, setSelectedSpace] = useState<Space | null>(null);
 
   useEffect(() => {
-    // Sync Dynamic Spaces
-    const qSpaces = query(collection(db, "spaces"));
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const qSpaces = query(
+      collection(db, "spaces"), 
+      where("userId", "==", user.uid)
+    );
+    
     const unsubSpaces = onSnapshot(qSpaces, (snapshot) => {
       setSpaces(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Space)));
     });
 
-    // Sync total plant count for the top stat card
-    const qPlants = query(collection(db, "plants"));
+    const qPlants = query(
+      collection(db, "plants"),
+      where("userId", "==", user.uid)
+    );
+    
     const unsubPlants = onSnapshot(qPlants, (snapshot) => {
       setTotalPlants(snapshot.size);
     });
@@ -31,11 +44,15 @@ export default function HomeDashboard() {
     return () => { unsubSpaces(); unsubPlants(); };
   }, []);
 
+  const handleOpenMenu = (space: Space) => {
+    setSelectedSpace(space);
+    setMenuVisible(true);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
-        {/* Header with Stats */}
         <View style={styles.headerCard}>
           <Text style={styles.brandTitle}>Leaflog</Text>
           <Text style={styles.greeting}>Hi, gardener.</Text>
@@ -47,7 +64,7 @@ export default function HomeDashboard() {
             </View>
             <View style={[styles.statsCard, { backgroundColor: '#F5F5F5' }]}>
               <Text style={styles.statsNumber}>{spaces.length}</Text>
-              <Text style={styles.statsLabel}>Active Spaces</Text>
+              <Text style={styles.statsLabel}>My Spaces</Text>
             </View>
           </View>
         </View>
@@ -55,27 +72,39 @@ export default function HomeDashboard() {
         <Text style={styles.sectionTitle}>Your plant spaces</Text>
         <Text style={styles.sectionSubtitle}>Tap a space to view its plants</Text>
 
-        {/* 1. Dynamic Spaces: These will appear here as you add them */}
         {spaces.map((space) => (
-          <TouchableOpacity key={space.id} style={styles.spaceCard}>
-            <View style={styles.spaceIconBox}>
-              <Ionicons name="leaf-outline" size={32} color="#2D4B2D" />
-            </View>
-            <View style={styles.spaceInfo}>
-              <View style={styles.spaceHeader}>
-                <Text style={styles.spaceName}>{space.name}</Text>
-                <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
-              </View>
-              <Text style={styles.spaceDetail}>Light: {space.lightCondition}</Text>
-              <View style={styles.statusRow}>
-                <Ionicons name="sparkles" size={16} color="#6B8E6B" />
-                <Text style={styles.statusText}>Connected</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
+          <View key={space.id}> 
+            <Link 
+              href={{
+                pathname: "/space/[id]",
+                params: { id: space.id, name: space.name }
+              }} 
+              asChild
+            >
+              <TouchableOpacity style={styles.spaceCard}>
+                <View style={styles.spaceIconBox}>
+                  <Ionicons name="leaf-outline" size={32} color="#2D4B2D" />
+                </View>
+                <View style={styles.spaceInfo}>
+                  <View style={styles.spaceHeader}>
+                    <Text style={styles.spaceName}>{space.name}</Text>
+                    <TouchableOpacity onPress={() => handleOpenMenu(space)}>
+                        <Ionicons name="ellipsis-horizontal" size={20} color="#666" />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.spaceDetail}>Light: {space.lightCondition}</Text>
+                  
+                  {/* FIXED: Changed <div> to <View> */}
+                  <View style={styles.statusRow}>
+                    <Ionicons name="lock-closed-outline" size={14} color="#6B8E6B" />
+                    <Text style={styles.statusText}>Private</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            </Link>
+          </View>
         ))}
 
-        {/* 2. Permanent Retired Plants Card */}
         <TouchableOpacity style={styles.retiredCard}>
           <View style={styles.retiredIconBox}>
             <Ionicons name="archive-outline" size={24} color="#2D4B2D" />
@@ -86,10 +115,53 @@ export default function HomeDashboard() {
           </View>
           <Ionicons name="chevron-forward" size={24} color="#666" />
         </TouchableOpacity>
-
       </ScrollView>
 
-      {/* Floating Action Button to add new Spaces */}
+      <Modal
+        visible={menuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <Pressable 
+            style={styles.modalOverlay} 
+            onPress={() => setMenuVisible(false)}
+        >
+          <View style={styles.menuContainer}>
+            <Text style={styles.menuTitle}>{selectedSpace?.name}</Text>
+            
+            <TouchableOpacity 
+                style={styles.menuOption} 
+                onPress={() => {
+                    setMenuVisible(false);
+                    router.push({ pathname: '/add-plant', params: { spaceId: selectedSpace?.id } });
+                }}
+            >
+              <Ionicons name="add-circle-outline" size={20} color="#2D4B2D" />
+              <Text style={styles.menuOptionText}>Add Plant</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+                style={styles.menuOption} 
+                onPress={() => {
+                    setMenuVisible(false);
+                    router.push({ 
+                        pathname: '/edit-space', 
+                        params: { 
+                            id: selectedSpace?.id, 
+                            name: selectedSpace?.name,
+                            light: selectedSpace?.lightCondition 
+                        } 
+                    });
+                }}
+            >
+              <Ionicons name="create-outline" size={20} color="#2D4B2D" />
+              <Text style={styles.menuOptionText}>Edit Space</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
       <Link href="/add" asChild>
         <TouchableOpacity style={styles.fab}>
           <Ionicons name="add" size={32} color="white" />
@@ -101,9 +173,9 @@ export default function HomeDashboard() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FBF9' },
-  scrollContent: { padding: 20 },
-  headerCard: { backgroundColor: '#FFF', borderRadius: 28, padding: 20, marginBottom: 25 },
-  brandTitle: { fontSize: 40, fontWeight: 'bold', color: '#2D4B2D', fontFamily: 'serif' },
+  scrollContent: { padding: 20, paddingBottom: 100 },
+  headerCard: { backgroundColor: '#FFF', borderRadius: 28, padding: 25, marginBottom: 25, elevation: 2 },
+  brandTitle: { fontSize: 40, fontWeight: 'bold', color: '#2D4B2D' },
   greeting: { fontSize: 18, color: '#666', marginBottom: 20 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-between' },
   statsCard: { width: '48%', padding: 15, borderRadius: 16 },
@@ -132,5 +204,38 @@ const styles = StyleSheet.create({
   fab: { 
     position: 'absolute', bottom: 30, right: 30, backgroundColor: '#2D4B2D', 
     width: 65, height: 65, borderRadius: 32.5, justifyContent: 'center', alignItems: 'center', elevation: 5 
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  menuContainer: {
+    width: 250,
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 20,
+    elevation: 5
+  },
+  menuTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#666',
+    marginBottom: 15,
+    textAlign: 'center'
+  },
+  menuOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#EEE'
+  },
+  menuOptionText: {
+    fontSize: 16,
+    color: '#2D4B2D',
+    marginLeft: 10,
+    fontWeight: '500'
   }
 });
