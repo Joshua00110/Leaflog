@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Modal, Pressable, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { db, auth } from '../../firebaseConfig'; 
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { Link, useRouter } from 'expo-router';
+import { collection, onSnapshot, query, where, doc, deleteDoc } from 'firebase/firestore';
+import { useRouter } from 'expo-router';
 
 interface Plant {
   id: string;
@@ -25,7 +25,6 @@ export default function PlantsScreen() {
     const user = auth.currentUser;
     if (!user) return;
 
-    // Filter plants by current user
     const q = query(collection(db, "plants"), where("userId", "==", user.uid));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const plantList = snapshot.docs.map(doc => ({ 
@@ -41,6 +40,32 @@ export default function PlantsScreen() {
   const handleOpenMenu = (plant: Plant) => {
     setSelectedPlant(plant);
     setMenuVisible(true);
+  };
+
+  // ✅ NEW: FUNCTIONAL DELETE LOGIC
+  const handleDeletePlant = async () => {
+    if (!selectedPlant) return;
+
+    Alert.alert(
+      "Remove Plant",
+      `Are you sure you want to delete ${selectedPlant.name}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, "plants", selectedPlant.id));
+              setMenuVisible(false);
+            } catch (error) {
+              Alert.alert("Error", "Could not delete plant.");
+              console.error(error);
+            }
+          } 
+        }
+      ]
+    );
   };
 
   return (
@@ -93,53 +118,51 @@ export default function PlantsScreen() {
         {/* Plant Cards */}
         {plants.map((plant) => (
           <View key={plant.id}>
-            <Link 
-              href={{
-                pathname: "/plant/[id]",
-                params: { id: plant.id }
-              }} 
-              asChild
+            <TouchableOpacity 
+              style={styles.plantCard}
+              activeOpacity={0.7}
+              onPress={() => {
+                router.push({
+                  pathname: "/plant/[id]",
+                  params: { id: plant.id }
+                });
+              }}
             >
-              <TouchableOpacity 
-                style={styles.plantCard}
-                activeOpacity={0.7}
-              >
-                <View style={styles.plantIconBox}>
-                  <Ionicons name="leaf" size={30} color="#6B8E6B" />
-                </View>
+              <View style={styles.plantIconBox}>
+                <Ionicons name="leaf" size={30} color="#6B8E6B" />
+              </View>
+              
+              <View style={styles.plantInfo}>
+                <Text style={styles.plantName}>{plant.name || "Unnamed Plant"}</Text>
+                <Text style={styles.plantSpace}>{plant.space || "No Space"}</Text>
                 
-                <View style={styles.plantInfo}>
-                  <Text style={styles.plantName}>{plant.name || "Unnamed Plant"}</Text>
-                  <Text style={styles.plantSpace}>{plant.space || "No Space"}</Text>
-                  
-                  <View style={styles.taskRow}>
-                    <Ionicons name="water" size={16} color="#E6B800" />
-                    <Text style={styles.taskTextYellow}>Water: Due today</Text>
-                  </View>
+                <View style={styles.taskRow}>
+                  <Ionicons name="water" size={16} color="#E6B800" />
+                  <Text style={styles.taskTextYellow}>Water: Due today</Text>
                 </View>
+              </View>
 
-                <View style={styles.cardActions}>
-                   <TouchableOpacity 
-                     style={styles.waterButton} 
-                     onPress={(e) => { 
-                       e.stopPropagation(); 
-                       alert('Watered!'); 
-                     }}
-                   >
-                      <Ionicons name="water" size={20} color="#4A90E2" />
-                   </TouchableOpacity>
-                   
-                   <TouchableOpacity 
-                     onPress={(e) => {
-                       e.stopPropagation(); 
-                       handleOpenMenu(plant);
-                     }}
-                   >
-                      <Ionicons name="ellipsis-horizontal" size={20} color="#999" />
-                   </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            </Link>
+              <View style={styles.cardActions}>
+                 <TouchableOpacity 
+                   style={styles.waterButton} 
+                   onPress={(e) => { 
+                     e.stopPropagation(); 
+                     alert('Watered!'); 
+                   }}
+                 >
+                    <Ionicons name="water" size={20} color="#4A90E2" />
+                 </TouchableOpacity>
+                 
+                 <TouchableOpacity 
+                   onPress={(e) => {
+                     e.stopPropagation(); 
+                     handleOpenMenu(plant);
+                   }}
+                 >
+                    <Ionicons name="ellipsis-horizontal" size={20} color="#999" />
+                 </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
           </View>
         ))}
 
@@ -176,7 +199,13 @@ export default function PlantsScreen() {
                 style={styles.menuOption} 
                 onPress={() => {
                     setMenuVisible(false);
-                    alert(`Editing ${selectedPlant?.name}`);
+                    if (selectedPlant) {
+                        // ✅ Navigates to the edit screen
+                        router.push({
+                            pathname: "/plant/edit/[id]",
+                            params: { id: selectedPlant.id }
+                        });
+                    }
                 }}
             >
               <Ionicons name="create-outline" size={20} color="#2D4B2D" />
@@ -185,10 +214,7 @@ export default function PlantsScreen() {
 
             <TouchableOpacity 
                 style={[styles.menuOption, { borderTopColor: '#FFE5E5' }]} 
-                onPress={() => {
-                    setMenuVisible(false);
-                    alert("Delete feature");
-                }}
+                onPress={handleDeletePlant} // ✅ Connected to handleDeletePlant
             >
               <Ionicons name="trash-outline" size={20} color="#FF4444" />
               <Text style={[styles.menuOptionText, { color: '#FF4444' }]}>Remove Plant</Text>
